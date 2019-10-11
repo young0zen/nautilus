@@ -358,7 +358,8 @@ ifdef NAUT_CONFIG_USE_GCC
 endif
 
 ifdef NAUT_CONFIG_USE_CLANG
-  COMMON_FLAGS += -O2  # -fno-delete-null-pointer-checks
+#  COMMON_FLAGS += -O2  # -fno-delete-null-pointer-checks
+  COMMON_FLAGS += -O2 -isystem /home/ompnk/tools -I/home/ompnk/tools/include  -I include/rt/virgil # -fno-delete-null-pointer-checks
    # -O3 will also work - PAD
 endif
 
@@ -579,13 +580,16 @@ ifneq ($(NAUT_CONFIG_CXX_SUPPORT)a,a)
 ifeq ($(NAUT_CONFIG_TOOLCHAIN_ROOT)a,""a)
 ifeq ($(CROSS_COMPILE)a, a)
 # guess where the std libs are 
-  libs-y += `locate libstdc++.a | head -1`
+#  libs-y += `locate libstdc++.a | head -1`
+libs-y += /home/ompnk/tools/lib64/libstdc++.a #/usr/lib/gcc/x86_64-linux-gnu/5/libstdc++.a
 else
   libs-y += $(CROSS_COMPILE)/../lib64/libstdc++.a
 endif
 else
   libs-y += $(NAUT_CONFIG_TOOLCHAIN_ROOT)/lib64/libstdc++.a
 endif
+
+
 endif # NAUT_CONFIG_CXX_SUPPORT
 
                            #$(NAUT_CONF_TOOLCHAIN_ROOT)/lib64/libstdc++.a

@@ -1,0 +1,2 @@
+make isoimage && qemu-system-x86_64 -display curses -smp 2 -m 2048 -vga std -cdrom nautilus.iso -serial file:serial.out
+

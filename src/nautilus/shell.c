@@ -962,3 +962,32 @@ static struct shell_cmd_impl hist_impl = {
     .handler  = handle_hist,
 };
 nk_register_shell_cmd(hist_impl);
+
+
+static int
+handle_virgil (char * buf, void * priv)
+{
+  char * args[] = {
+    "virgil_test1",
+    "10",
+    "1000",
+    "2",
+  };
+  
+  extern int virgil_test1 (int argc, char *argv[]);
+
+  nk_vc_printf("calling virgil_test1(%s,%s,%s,%s)\n", args[0],args[1],args[2],args[3]);
+
+  virgil_test1(4, args);
+
+  return 0;
+}
+
+
+static struct shell_cmd_impl virgil_impl = {
+    .cmd      = "virgil",
+    .help_str = "virgil",
+    .handler  = handle_virgil,
+};
+nk_register_shell_cmd(virgil_impl);
+

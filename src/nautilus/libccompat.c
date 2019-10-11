@@ -33,10 +33,13 @@
 
 #include <nautilus/nautilus.h>
 #include <nautilus/libccompat.h>
+#include <nautilus/waitqueue.h>
 #include <nautilus/thread.h>
 #include <nautilus/errno.h>
 #include <nautilus/random.h>
 #include <dev/hpet.h>
+
+#include <nautilus/backtrace.h>
 
 
 int errno=0;
@@ -306,8 +309,9 @@ drand48(void)
 char *
 strerror (int errnum)
 {
-    UNDEF_FUN_ERR();
-    return NULL;
+  nk_vc_printf("strerror with error %d\n",errnum);
+  UNDEF_FUN_ERR();
+  return "Nautilus Unimplented Function";
 }
 FILE *tmpfile(void)
 {
@@ -571,12 +575,152 @@ ioctl (int d, unsigned long request, ...)
     return -1;
 }
 
-int 
-syscall (int number, ...)
+#define NUM_FUTEXES 32
+
+struct futex {
+  int *uaddr;      // search key; == 0 implies not in use
+  int val;         // for wait check
+  nk_wait_queue_t *waitq;
+};
+
+static int futex_inited = 0;
+
+static struct futex futex_pool[NUM_FUTEXES];
+
+static int futex_init()
 {
-    UNDEF_FUN_ERR();
-    return -1;
+  if (!futex_inited) {
+    int i;
+    char buf[80];
+    for (i=0;i<NUM_FUTEXES;i++) {
+      futex_pool[i].uaddr = 0;
+      futex_pool[i].val = 0;
+      sprintf(buf,"futex%d-waitq",i);
+      futex_pool[i].waitq = nk_wait_queue_create(buf);
+      if (!futex_pool[i].waitq) {
+	// ERROR
+	return -1;
+      }
+    }
+    futex_inited = 1;
+  }
+  return 0;
 }
+
+static struct futex *futex_find(int *uaddr)
+{
+  int i;
+  for (i=0;i<NUM_FUTEXES;i++) {
+    if (futex_pool[i].uaddr==uaddr) {
+      return &futex_pool[i];
+    }
+  }
+  return 0;
+}
+
+static struct futex *futex_allocate(int *uaddr)
+{
+  int i;
+  for (i=0;i<NUM_FUTEXES;i++) {
+    if (__sync_bool_compare_and_swap(&futex_pool[i].uaddr,0,uaddr)) {
+      return &futex_pool[i];
+    }
+  }
+  return 0;
+}
+
+static void futex_free(int *uaddr)
+{
+  struct futex *f = futex_find(uaddr);
+  if (f) {
+    __sync_fetch_and_and(&f->uaddr,0);
+  }
+}
+
+static int futex_check(void *state)
+{
+  struct futex *f = (struct futex *)state;
+  
+  return *(f->uaddr) != f->val;
+}
+
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+
+int futex(int *uaddr, int futex_op, int val,
+	  const struct timespec *timeout,   /* or: uint32_t val2 */
+	  int *uaddr2, int val3)
+{
+  struct futex *f;
+  nk_vc_printf("futex(%p,%d,%d,%p,%p,%d)\n", uaddr, futex_op, val, timeout, uaddr2,val3);
+  BACKTRACE(nk_vc_printf,8);
+
+  futex_init();
+  
+  switch (futex_op) {
+    case FUTEX_WAIT: 
+      if (timeout) {
+	nk_vc_printf("timeout unsupported\n");
+	return -1;
+      }
+      f = futex_find(uaddr);
+      if (!f) {
+	f = futex_allocate(uaddr);
+      }
+      if (!f) {
+	nk_vc_printf("cannot find or allocate futex\n");
+	return -1;
+      }
+
+      nk_vc_printf("Starting futex wait on %p %p %d %d\n", f,f->uaddr,*f->uaddr,val);
+      f->val = val;
+      nk_wait_queue_sleep_extended(f->waitq, futex_check, f);
+      nk_vc_printf("Finished futex wait on %p %p %d %d\n", f,f->uaddr,*f->uaddr,val);
+      
+      return 0;
+
+      break;
+  
+      
+    case FUTEX_WAKE:
+      f = futex_find(uaddr);
+      if (!f) {
+	return 0;  // no one to wake - probably race with a FUTEX_WAIT
+      }
+
+      nk_vc_printf("Starting futex wake on %p %p %d (waking %d%s)\n", f,f->uaddr,*f->uaddr,val,val==INT_MAX ? " ALL" : "");
+      
+      if (val != INT_MAX) {
+	int i;
+	for (i=0;i<val;i++) { 
+	  nk_wait_queue_wake_one(f->waitq);
+	}
+      } else {
+	nk_wait_queue_wake_all(f->waitq);
+      }
+      return 0;
+      break;
+    default:
+      nk_vc_printf("Unsupported FUTEX OP\n");
+      BACKTRACE(nk_vc_printf,8);
+      return -1;
+    }
+}
+
+
+int 
+syscall (int number, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6)
+{
+  if (number == 202) {
+    return futex((int*)a1,(int)a2,(int)a3,(const struct timespec *)a4,(int*)a5,(int)a6);
+  } else {
+    nk_vc_printf("UNIMPLEMENTED SYSCALL %d %lx %lx %lx %lx %lx\n", number, a1, a2, a3, a4, a5, a6);
+    UNDEF_FUN_ERR();
+    BACKTRACE(nk_vc_printf,8);
+    return -1;
+  }
+}
+
 
 
 

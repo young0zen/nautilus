@@ -1112,6 +1112,26 @@ menu "Runtimes"
             help 
               Include OpenMP simple tests and Edinburgh microbenchmarks
 
+	config VIRGIL_RT
+          bool  "Virgil RT"
+	  default n
+	  help
+	      Include the Virgil run-time
+
+        config VIRGIL_RT_DEBUG
+            bool "Debug Virgil RT";
+	    default n
+            depends on VIRGIL_RT
+            help 
+              Debugging output for Virgil RT
+
+        config VIRGIL_RT_TESTS
+            bool "Include tests/benchmarks for Virgil RT";
+	    default n
+            depends on VIRGIL_RT
+            help 
+              Include Virgil simple tests
+
        config RACKET_RT
             bool "Racket RT (via Multiverse)";
 	    default y

@@ -166,7 +166,7 @@ uint64_t lseek64(int fd, uint64_t offset, int whence);
 uint64_t ftello64(FILE *stream);
 int poll (struct pollfd *fds, nfds_t nfds, int timeout);
 int ioctl(int d, unsigned long request, ...);
-int syscall(int number, ...);
+int syscall();
 char *setlocale(int category, const char *locale);
 locale_t __duplocale(locale_t locobj);
 char * bindtextdomain (const char * domainname, const char * dirname);

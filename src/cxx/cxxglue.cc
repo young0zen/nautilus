@@ -37,6 +37,7 @@
 #include <nautilus/naut_types.h>
 #include <nautilus/cxxglue.h>
 #include <nautilus/mm.h>
+#include <nautilus/backtrace.h>
 
 void * __dso_handle;
 unsigned __atexit_func_count = 0;
@@ -45,7 +46,8 @@ atexit_func_entry_t __atexit_funcs[ATEXIT_MAX_FUNCS];
 extern "C" void printk(const char *fmt, ...);
 extern "C" void panic(const char * fmt, ...);
 
-#define BAD() panic("Undefined C++ function (%s)\n", __func__)
+
+#define BAD() BACKTRACE(printk, 8); panic("Undefined C++ function (%s)\n", __func__)
 
 // Called when a pure virtual function call is attempted
 void 
