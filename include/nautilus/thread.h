@@ -178,6 +178,8 @@ struct nk_thread {
     uint16_t fpu_state_offset;   /* +16 SHOULD NOT CHANGE POSITION */
     nk_cache_part_thread_state_t /* +18 SHOULD NOT CHANGE POSITION */
              cache_part_state;   /* Always included to reserve this "slot" for asm code */
+    struct nk_aspace *aspace;    /* +24 SHOULD NOT CHANGE POSITION */
+                                 /* Always included to reserve this "slot" for asm code */
 
     nk_stack_size_t stack_size;
     unsigned long tid;
