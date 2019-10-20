@@ -6,14 +6,14 @@
 
 #include <nautilus/aspace.h>
 
-#ifndef NAUT_CONFIG_DEBUG_ASPACE_BASE
+#ifndef NAUT_CONFIG_DEBUG_ASPACE_PAGING
 #undef DEBUG_PRINT
 #define DEBUG_PRINT(fmt, args...) 
 #endif
 
-#define ERROR(fmt, args...) ERROR_PRINT("aspace-base: ERROR %s(%d): " fmt, __FILE__, __LINE__, ##args)
-#define DEBUG(fmt, args...) DEBUG_PRINT("aspace-base: DEBUG: " fmt, ##args)
-#define INFO(fmt, args...)   INFO_PRINT("aspace-base: " fmt, ##args)
+#define ERROR(fmt, args...) ERROR_PRINT("aspace-paging: ERROR %s(%d): " fmt, __FILE__, __LINE__, ##args)
+#define DEBUG(fmt, args...) DEBUG_PRINT("aspace-paging: DEBUG: " fmt, ##args)
+#define INFO(fmt, args...)   INFO_PRINT("aspace-paging: " fmt, ##args)
 
 
 static int   get_characteristics(nk_aspace_characteristics_t *c)
