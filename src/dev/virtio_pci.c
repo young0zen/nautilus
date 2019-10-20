@@ -158,7 +158,7 @@ int discover_devices(struct pci_info *pci)
                     vdev->type = VIRTIO_PCI_INPUT;
                     break;
                 default:
-                    DEBUG("Unknown Device\n");
+                    DEBUG("Unknown Device (%d)\n",cfg->dev_cfg.subsys_id);
                     vdev->type = VIRTIO_PCI_UNKNOWN;
                     break;
                 }
@@ -180,7 +180,7 @@ int discover_devices(struct pci_info *pci)
                 // check to see if there are no others
                 int foundmem=0;
                 int foundio=0;
-                for (int i=0;i<6;i++) { 
+                for (int i=0;i<2;i++) { 
                     uint32_t bar = pci_cfg_readl(bus->num,pdev->num, 0, 0x10 + i*4);
                     uint32_t size;
                     DEBUG("bar %d: 0x%0x\n",i, bar);
