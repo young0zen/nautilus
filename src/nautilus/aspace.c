@@ -26,10 +26,11 @@
 #include <nautilus/paging.h>
 #include <nautilus/thread.h>
 #include <nautilus/shell.h>
+#include <nautilus/idt.h>
 
 #include <nautilus/aspace.h>
 
-#ifndef NAUT_CONFIG_DEBUG_ASPACE
+#ifndef NAUT_CONFIG_DEBUG_ASPACES
 #undef DEBUG_PRINT
 #define DEBUG_PRINT(fmt, args...) 
 #endif
@@ -219,7 +220,64 @@ int  nk_aspace_move_region(nk_aspace_t *aspace, nk_aspace_region_t *cur_region, 
     BOILERPLATE(aspace,move_region,cur_region,new_region);
 }
 
+int nk_aspace_switch(nk_aspace_t *next)
+{
+    struct cpu *cpu = get_cpu();
+    nk_aspace_t *cur = cpu->cur_aspace;
 
+    DEBUG("cpu %p\n",cpu);
+    DEBUG("cpu %d switching from address space %p to %p\n",cpu->id,cur,next);
+
+    if (next==cur) {
+	// do nothing
+	DEBUG("aspaces are the same - ignoring switch\n");
+    } else {
+	if (cur) {
+	    DEBUG("switching away from current address space\n");
+	    cur->interface->switch_from(cur->state);
+	} else {
+	    DEBUG("switching away from zero address space\n");
+	    // switching from base address space
+	}
+	if (next) {
+	    DEBUG("switching to next address space\n");
+	    next->interface->switch_to(next->state);
+	    cur = next;
+	} else {
+	    DEBUG("switching to base address space\n");
+	    // switching to base address space
+	}
+    }
+    DEBUG("address space switch complete\n");
+    return 0;
+}
+
+int nk_aspace_exception(excp_entry_t *entry, excp_vec_t vec, void *priv_data)
+{
+    struct cpu *cpu  = get_cpu();
+    nk_aspace_t *cur = cpu->cur_aspace;
+
+    if (vec==PF_EXCP) {
+	if (cur->flags & NK_ASPACE_HOOK_PF) {
+	    return cur->interface->exception(cur->state,entry,vec);
+	} else {
+	    // cannot handle
+	    return -1;
+	}
+    }
+
+    if (vec==GP_EXCP) {
+	if (cur->flags & NK_ASPACE_HOOK_GPF) {
+	    return cur->interface->exception(cur->state, entry, vec);
+	} else {
+	    // cannot handle
+	    return -1;
+	}
+    }
+
+    return -1;
+}
+    
 
 int nk_aspace_init()
 {

@@ -42,11 +42,13 @@
 
 static int   get_characteristics(nk_aspace_characteristics_t *c)
 {
+    DEBUG("cannot get characteristics of base address space\n");
     return -1;
 }
 
 static struct nk_aspace * create(char *name, nk_aspace_characteristics_t *c)
 {
+    DEBUG("only one base address space exists\n");
     return 0;
 }
 

@@ -44,6 +44,10 @@
 #include <arch/hrt/hrt.h>
 #endif
 
+#ifdef NAUT_CONFIG_ASPACES
+#include <nautilus/aspace.h>
+#endif
+
 #ifndef NAUT_CONFIG_DEBUG_PAGING
 #undef DEBUG_PRINT
 #define DEBUG_PRINT(fmt, args...)
@@ -321,14 +325,21 @@ nk_map_page_nocache (addr_t paddr, uint64_t flags, page_size_t ps)
 int
 nk_pf_handler (excp_entry_t * excp,
                excp_vec_t     vector,
-               addr_t         fault_addr)
+               void         * state)
 {
 
     cpu_id_t id = cpu_info_ready ? my_cpu_id() : 0xffffffff;
-
+    uint64_t fault_addr = read_cr2();
+    
 #ifdef NAUT_CONFIG_HVM_HRT
     if (excp->error_code == UPCALL_MAGIC_ERROR) {
         return nautilus_hrt_upcall_handler(NULL, 0);
+    }
+#endif
+
+#ifdef NAUT_CONFIG_ASPACES
+    if (!nk_aspace_exception(excp,vector,state)) {
+	return 0;
     }
 #endif
 
@@ -346,6 +357,30 @@ nk_pf_handler (excp_entry_t * excp,
 
     panic("+++ HALTING +++\n");
     return 0;
+}
+
+
+/*
+ * nk_gpf_handler
+ *
+ * general protection fault handler
+ *
+ */
+int
+nk_gpf_handler (excp_entry_t * excp,
+		excp_vec_t     vector,
+		void         * state)
+{
+
+    cpu_id_t id = cpu_info_ready ? my_cpu_id() : 0xffffffff;
+
+#ifdef NAUT_CONFIG_ASPACES
+    if (!nk_aspace_exception(excp,vector,state)) {
+	return 0;
+    }
+#endif
+
+    return null_excp_handler(excp,vector,state);
 }
 
 
@@ -604,6 +639,7 @@ construct_ident_map (pml4e_t * pml, page_size_t ptype, ulong_t bytes)
     }
 }
 
+static uint64_t base_cr3;
 
 /* 
  * Identity map all of physical memory using
@@ -633,7 +669,13 @@ kern_ident_map (struct nk_mem_info * mem, ulong_t mbd)
     construct_ident_map(pml, lps, last_pfn<<PAGE_SHIFT);
 
     /* install the new tables, this will also flush the TLB */
+    base_cr3 = (uint64_t)pml;
     write_cr3((ulong_t)pml);
+}
+
+uint64_t nk_paging_get_base_cr3()
+{
+    return base_cr3;
 }
 
 

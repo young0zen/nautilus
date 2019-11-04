@@ -249,13 +249,9 @@ skip_per_cpu_update1:
     movabs $idt_handler_table, %rdx
     movq (%rdx, %rsi, 8), %r8   # pointer to handler
     movabs $idt_state_table, %rdx
-    movq (%rdx, %rsi, 8), %rcx   # pointer to state
-    cmpq $14, %rsi
-    jnz no_pf
-    movq %cr2, %rdx
+    movq (%rdx, %rsi, 8), %rdx   # pointer to state
 
-no_pf:
-    callq *%r8   # rdi = exp struct, rsi = irq num, rdx = error, rcx = state
+    callq *%r8   # rdi = exp struct, rsi = irq num, rdx = state
     testq %rax, %rax
     jnz excp_err
 
