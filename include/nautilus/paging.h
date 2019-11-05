@@ -104,7 +104,9 @@ void nk_paging_init(struct nk_mem_info * mem, ulong_t mbd);
 int nk_pf_handler(excp_entry_t * excp, excp_vec_t vector, void *state);
 int nk_gpf_handler(excp_entry_t * excp, excp_vec_t vector, void *state);
 
-uint64_t nk_paging_get_base_cr3();
+uint64_t nk_paging_default_page_size();
+uint64_t nk_paging_default_cr3();
+uint64_t nk_paging_default_cr4();
     
 #define PAGE_SHIFT_4KB 12UL
 #define PAGE_SHIFT_2MB 21UL

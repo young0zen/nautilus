@@ -24,6 +24,8 @@
 #ifndef __NK_ASPACE
 #define __NK_ASPACE
 
+#include <nautilus/idt.h>
+
 typedef struct nk_aspace_characteristics {
     uint64_t   granularity;     // smallest unit of control (bytes)
     uint64_t   alignment;       // smallest alignment (bytes)
@@ -151,6 +153,7 @@ int          nk_aspace_remove_region(nk_aspace_t *aspace, nk_aspace_region_t *re
 int          nk_aspace_protect(nk_aspace_t *aspace, nk_aspace_region_t *region, nk_aspace_protection_t *prot);
 
 int          nk_aspace_move_region(nk_aspace_t *aspace, nk_aspace_region_t *cur_region, nk_aspace_region_t *new_region);
+
 
 
 // call on BSP after percpu and kmem are available

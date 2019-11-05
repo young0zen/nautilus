@@ -39,16 +39,150 @@
 #define DEBUG(fmt, args...) DEBUG_PRINT("aspace-base: DEBUG: " fmt, ##args)
 #define INFO(fmt, args...)   INFO_PRINT("aspace-base: " fmt, ##args)
 
+// There is only a single base address space,
+// hence a single global to represent it
+static struct nk_aspace_base {
+    nk_aspace_t *aspace;
+    
+    nk_aspace_region_t theregion; // there is only one
+
+    nk_aspace_characteristics_t chars;
+    
+    uint64_t     cr3; 
+#define CR4_MASK 0xb0ULL // bits 4,5,7
+    uint64_t     cr4;
+} base_state;
+
+
+static  int destroy(void *state)
+{
+    ERROR("Cannot destroy the singular base address space\n");
+    return -1;
+}
+    
+static int add_thread(void *state)
+{
+    struct nk_aspace_base *as = (struct nk_aspace_base *)state;
+    struct nk_thread *thread = get_cur_thread();
+
+    DEBUG("Add thread %p to base address\n");
+    
+    return 0;
+}
+    
+    
+static int remove_thread(void *state)
+{
+    struct nk_thread *thread = get_cur_thread();
+
+    thread->aspace = 0;
+
+    return 0;
+    
+}
+
+static int add_region(void *state, nk_aspace_region_t *region)
+{
+    ERROR("Cannot add regions to the base address space\n");
+    return -1;
+}
+
+static int remove_region(void *state, nk_aspace_region_t *region)
+{
+    ERROR("Cannot remove regions from the base address space\n");
+    return -1;
+}
+    
+static int protect_region(void *state, nk_aspace_region_t *region, nk_aspace_protection_t *prot)
+{
+    ERROR("Cannot protect regions in the base address space\n");
+    return -1;
+}
+
+static int move_region(void *state, nk_aspace_region_t *cur_region, nk_aspace_region_t *new_region)
+{
+    ERROR("Cannot move regions in the base address space\n");
+    return -1;
+}
+    
+static int switch_from(void *state)
+{
+    struct nk_aspace_base *as = (struct nk_aspace_base *)state;
+    struct nk_thread *thread = get_cur_thread();
+
+    DEBUG("Switching out base address space from thread %d\n",thread->tid);
+    
+    return 0;
+}
+
+static int switch_to(void *state)
+{
+    struct nk_aspace_base *as = (struct nk_aspace_base *)state;
+    struct nk_thread *thread = get_cur_thread();
+    uint64_t cr4;
+    
+    DEBUG("Switching in base address space from thread %d\n",thread->tid);
+
+    write_cr3(as->cr3);
+    cr4 = read_cr4();
+    cr4 &= ~CR4_MASK;
+    cr4 |= as->cr4;
+    write_cr4(cr4);
+    return 0;
+}
+    
+static int exception(void *state, excp_entry_t *exp, excp_vec_t vec)
+{
+    struct nk_aspace_base *as = (struct nk_aspace_base *)state;
+    struct nk_thread *thread = get_cur_thread();
+
+    DEBUG("Exception 0x%x on thread %d\n",vec,thread->tid);
+
+    panic("PAGE FAULTS CANNOT OCCUR FOR BASE ADDRESS SPACE\n");
+    
+    return -1;
+}
+    
+static int print(void *state, int detailed)
+{
+    struct nk_aspace_base *as = (struct nk_aspace_base *)state;
+    struct nk_thread *thread = get_cur_thread();
+
+    nk_vc_printf("%s Base Address Space [granularity 0x%lx alignment 0x%lx]\n",
+		 as->aspace->name, as->chars.granularity, as->chars.alignment);
+    nk_vc_printf("   Region: %016lx - %016lx => %016lx\n"
+		 "   CR3:    %016lx  CR4m: %016lx\n",
+		 (uint64_t) as->theregion.va_start,
+		 (uint64_t) as->theregion.va_start + as->theregion.len_bytes,
+		 (uint64_t) as->theregion.pa_start, as->cr3,as->cr4);
+
+    return 0;
+}    
+
+static nk_aspace_interface_t base_interface = {
+    .destroy = destroy,
+    .add_thread = add_thread,
+    .remove_thread = remove_thread,
+    .add_region = add_region,
+    .remove_region = remove_region,
+    .protect_region = protect_region,
+    .move_region = move_region,
+    .switch_from = switch_from,
+    .switch_to = switch_to,
+    .exception = exception,
+    .print = print
+};
+
 
 static int   get_characteristics(nk_aspace_characteristics_t *c)
 {
-    DEBUG("cannot get characteristics of base address space\n");
-    return -1;
+    *c = base_state.chars;
+    return 0;
 }
 
 static struct nk_aspace * create(char *name, nk_aspace_characteristics_t *c)
 {
-    DEBUG("only one base address space exists\n");
+    ERROR("failed to create new aspace - only one base address space can exist\n");
     return 0;
 }
 
@@ -59,531 +193,51 @@ static nk_aspace_impl_t base = {
 				.create = create,
 };
 
+
+
+//
+// The base address space is special in that there
+// is exactly one, it does almost nothing, and it is
+// installed at start.
+//
+//
+
+int nk_aspace_base_init()
+{
+    struct naut_info *info = nk_get_nautilus_info();
+    
+    memset(&base_state,0,sizeof(base_state));
+
+    // configure region
+    base_state.theregion.va_start=0;
+    base_state.theregion.pa_start=0;
+    base_state.theregion.len_bytes = mm_boot_last_pfn()<<PAGE_SHIFT;
+
+    // configure chars
+    base_state.chars.granularity = 
+	base_state.chars.alignment = nk_paging_default_page_size();
+    
+    
+    // Capture pointer to the base page tables
+    // that were installed at boot and are in current use
+    base_state.cr3 = nk_paging_default_cr3();
+    base_state.cr4 = nk_paging_default_cr4() & CR4_MASK;
+
+    base_state.aspace = nk_aspace_register("base",0,&base_interface, &base_state);
+
+    if (!base_state.aspace) {
+	ERROR("Unable to register base address space\n");
+	return -1;
+    }
+
+    DEBUG("Base address space configured and initialized\n");
+    
+    return 0;
+}
+
 nk_aspace_register_impl(base);
 
 
 
 
 
-#if 0
-#include <nautilus/nautilus.h>
-#include <nautilus/spinlock.h>
-#include <nautilus/aspace.h>
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-#include <nautilus/aspace/paging.h>
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-#include <nautilus/aspace/carat.h>
-#endif
-
-#include <nautilus/paging.h>
-#include <nautilus/thread.h>
-#include <nautilus/shell.h>
-
-
-static spinlock_t state_lock;
-
-#define STATE_LOCK_CONF uint8_t _state_lock_flags
-#define STATE_LOCK() _state_lock_flags = spin_lock_irq_save(&state_lock)
-#define STATE_UNLOCK() spin_unlock_irq_restore(&state_lock, _state_lock_flags);
-
-#define ASPACE_LOCK_CONF uint8_t _aspace_lock_flags
-#define ASPACE_LOCK(a) _aspace_lock_flags = spin_lock_irq_save(a->lock)
-#define ASPACE_UNLOCK(a) spin_unlock_irq_restore(a->lock, _aspace_lock_flags);
-
-#define THREAD_LOCK_CONF uint8_t _thread_lock_flags
-#define THREAD_LOCK(t) _thread_lock_flags = spin_lock_irq_save(t->lock)
-#define THREAD_UNLOCK(t) spin_unlock_irq_restore(t->lock, _thread_lock_flags);
-
-static struct list_head aspace_list;
-
-static nk_aspace_t base;
-
-nk_aspace_region_t base_reg;
-
-
-int nk_aspace_init_aspace(nk_aspace_t *a, char *name)
-{
-    memset(a,0,sizeof(nk_aspace_t));
-    spinklock_init(&a.lock);
-    
-    strncpy(a->name,name,32); a->name[NK_ASPACE_NAME_LEN-1]=0;
-    INIT_LIST_HEAD(&a->region_list);
-    INIT_LIST_HEAD(&a->thread_list);
-    INIT_LIST_HEAD(&a->aspace_list_node);
-
-    return 0;
-}
-
-
-
-
-int nk_aspace_query(nk_aspace_type_t type, nk_aspace_characteristics_t *chars)
-{
-    switch (type) {
-    case NK_ASPACE_BASE:
-	*chars = base.chars;
-	return 0;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	return nk_aspace_query_paging(chars);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	return nk_aspace_query_carat(chars);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	return -1;
-    }
-
-}
-
-nk_aspace_t *nk_aspace_create(nk_aspace_type type, char *name)
-{
-    switch (type) {
-    case NK_ASPACE_BASE:
-	AS_ERROR("Attempt to create new base aspace\n");
-	return 0;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	return nk_aspace_create_paging(name);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	return nk_aspace_query_carat(name);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	return -1;
-    }
-}
-
-int          nk_aspace_destroy(nk_aspace_t *aspace)
-{
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	AS_ERROR("Attempt to destory new base aspace\n");
-	return -1;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	return nk_aspace_destroy_paging((nk_aspace_paging_t *)aspace);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	return nk_aspace_destroy_carat((nk_aspace_carat_t *)aspace);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	return -1;
-    }
-}
-    
-
-
-nk_aspace_t *nk_aspace_base()
-{
-    return &base;
-}
-
-nk_aspace_t *nk_aspace_find(char *name)
-{
-    struct list_head *cur;
-    nk_aspace_t  *target=0;
-    
-    STATE_LOCK_CONF;
-    STATE_LOCK();
-    list_for_each(cur,&aspace_list) {
-	if (!strncasecmp(list_entry(cur,struct nk_aspace,aspace_listnode)->name,name,NK_ASPACE_NAME_LEN)) { 
-	    target = list_entry(cur,struct nk_aspace, aspace_list_node);
-	    break;
-	}
-    }
-    STATE_UNLOCK();
-    return target;
-}
-
-
-// assumes we have interrupts off
-// and the thread being lost is us
-int          nk_aspace_losing_thread(nk_aspace_t *aspace)
-{
-    switch (aspace) {
-    case NK_ASPACE_BASE: {
-	nk_thread_t *t = get_cur_thread();
-	nk_aspace_t *a = t->aspace;
-	ASPACE_LOCK_CONF;
-	THREAD_LOCK_CONF;
-	
-	ASPACE_LOCK(a);
-	THREAD_LOCK(t);
-
-	list_del_init(t->aspace_node);
-	t->aspace = 0;
-
-	THREAD_UNLOCK(t);
-	ASPACE_UNLOCK(a);
-	
-	return 0;
-    }
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	return nk_aspace_losing_thread_paging((nk_aspace_paging_t *)aspace);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	return nk_aspace_losing_thread_carat((nk_aspace_carat_t *)aspace);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	return -1;
-    }
-}
-
-int          nk_aspace_move_thread(nk_aspace_t *aspace)
-{
-
-    switch (aspace->type) {
-    case NK_ASPACE_BASE: {
-	nk_thread_t *t = get_cur_thread();
-	uint8_t flags;
-	THREAD_LOCK_CONF;
-	ASPACE_LOCK_CONF;
-
-	// dangerous if interrupts are off
-	AS_DEBUG("moving thread %d (%s) from %p (%s) to %p (%s)\n",t->tid,t->name,
-		 t->aspace, t->aspace->name, aspace, aspace->name);
-	
-
-	flags = irq_disable_save();
-
-	// we are now going to keep running as long as needed
-	// and we are unstealable
-
-	// old address space is losing thread
-	nk_aspace_inform_lost_thread(t->aspace);
-
-	// we still have interrupts off
-	
-
-	ASPACE_LOCK(a);
-	THREAD_LOCK(t);
-
-	list_add_tail(&t->aspace_node,&aspace->thread_list);
-	t->aspace = aspace;
-
-	THREAD_UNLOCK(t);
-	ASPACE_UNLOCK(a);
-
-	// now actually do the switch
-
-	nk_aspace_switch(a);
-
-	AS_DEBUG("thread %d (%s) is now in %p (%s)\n",t->tid,t->name, t->aspace,t->aspace->name);
-
-	return 0;
-    }
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	return nk_aspace_move_thread_paging((nk_aspace_paging_t *)aspace);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	return nk_aspace_move_thread_carat((nk_aspace_carat_t *)aspace);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	return -1;
-    }
-}
-
-int          nk_aspace_add_region(nk_aspace_t *aspace, nk_aspace_region_t *region)
-{
-    // add then inform
-    ASPACE_LOCK_CONF;
-    int rc;
-
-    ASPACE_LOCK(aspace);
-
-    list_add_tail(&region->node,&aspace->region_list);
-
-    
-    // now do informs
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	rc = 0;
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	rc = nk_aspace_add_region_paging((nk_aspace_paging_t *)aspace,region);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	rc = nk_aspace_add_region_carat((nk_aspace_carat_t *)aspace,region);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	rc = -1;
-	break;
-    }
-
-    ASPACE_UNLOCK(aspace);
-    return rc;
-}
-
-int          nk_aspace_remove_region(nk_aspace_t *aspace, nk_aspace_region_t *region)
-{
-    // add then inform
-    ASPACE_LOCK_CONF;
-    int rc;
-
-    ASPACE_LOCK(aspace);
-
-    // now do informs
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	rc = 0;
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	rc = nk_aspace_remove_region_paging((nk_aspace_paging_t *)aspace,region);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	rc = nk_aspace_remove_region_carat((nk_aspace_carat_t *)aspace,region);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	rc = -1;
-	break;
-    }
-
-    list_del_init(&region->node);
-    
-    ASPACE_UNLOCK(aspace);
-    return rc;
-}
-
-int          nk_aspace_invalidate_region(nk_aspace_t *aspace, nk_aspace_region_t *region)
-{
-    // add then inform
-    ASPACE_LOCK_CONF;
-    int rc;
-
-    ASPACE_LOCK(aspace);
-
-    // now do informs
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	rc = 0;
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	rc = nk_aspace_invalidate_region_paging((nk_aspace_paging_t *)aspace,region);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	rc = nk_aspace_invalidate_region_carat((nk_aspace_carat_t *)aspace,region);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	rc = -1;
-	break;
-    }
-
-    ASPACE_UNLOCK(aspace);
-    return rc;
-}
-
-int          nk_aspace_validate_region(nk_aspace_t *aspace, nk_aspace_region_t *region)
-{
-    // add then inform
-    ASPACE_LOCK_CONF;
-    int rc;
-
-    ASPACE_LOCK(aspace);
-
-    // now do informs
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	rc = 0;
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	rc = nk_aspace_validate_region_paging((nk_aspace_paging_t *)aspace,region);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	rc = nk_aspace_validate_region_carat((nk_aspace_carat_t *)aspace,region);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	rc = -1;
-	break;
-    }
-
-    ASPACE_UNLOCK(aspace);
-    return rc;
-}
-
-
-int          nk_aspace_move_region_virtual(nk_space_t *aspace, nk_aspace_region_t *region, void *new_va_start)
-{
-    ASPACE_LOCK_CONF;
-    int rc;
-
-    ASPACE_LOCK(aspace);
-
-    // now do informs
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	AS_ERROR("Cannot move virtual regions on base aspace\n");
-	rc = -1;
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	rc = nk_aspace_move_region_virtual_paging((nk_aspace_paging_t *)aspace,region,new_va_start);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	rc = nk_aspace_move_region_virtual_carat((nk_aspace_carat_t *)aspace,region,new_va_start);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	rc = -1;
-	break;
-    }
-
-    ASPACE_UNLOCK(aspace);
-    return rc;
-}
-
-int          nk_aspace_move_region_physical(nk_space_t *aspace, nk_aspace_region_t *region, void *new_pa_start)
-{
-    ASPACE_LOCK_CONF;
-    int rc;
-
-    ASPACE_LOCK(aspace);
-
-    // now do informs
-    switch (aspace->type) {
-    case NK_ASPACE_BASE:
-	AS_ERROR("Cannot move physical regions on base aspace\n");
-	rc = -1;
-	break;
-#ifdef NAUT_CONFIG_ASPACE_PAGING
-    case NK_ASPACE_PAGING:
-	rc = nk_aspace_move_region_physical_paging((nk_aspace_paging_t *)aspace,region,new_va_start);
-	break;
-#endif
-#ifdef NAUT_CONFIG_ASPACE_CARAT
-    case NK_ASPACE_CARAT:
-	rc = nk_aspace_move_region_physical_carat((nk_aspace_carat_t *)aspace,region,new_va_start);
-	break;
-#endif
-    default:
-	AS_ERROR("unknown type %d\n",type);
-	rc = -1;
-	break;
-    }
-
-    ASPACE_UNLOCK(aspace);
-    return rc;
-}
-
-
-int nk_aspace_init()
-{
-    INIT_LIST_HEAD(&aspace_list);
-    spinlock_init(&state_lock);
-
-    nk_aspace_init_aspace(&base,"(base)");
-    base.type = NK_ASPACE_BASE;
-    base.chars.granularity = PAGE_SIZE;
-    base.chars.alignment = PAGE_SIZE;
-
-    base_reg.va_start = 0;
-    base_reg.pa_start = 0;
-    base_reg.len_bytes = mm_boot_last_pfn() * PAGE_SIZE;
-    INIT_LIST_HEAD(&base_reg.node);
-    
-    list_add_tail(&base_reg.node,&base.region_list);
-    list_add_tail(&base.aspace_list_node,&aspace_list);
-    
-    INFO("inited\n");
-    return 0;
-}
-
-int nk_aspace_init_ap()
-{
-    INFO("inited\n");
-}
-
-int nk_aspace_deinit()
-{
-    spinlock_deinit(&state_lock);
-    INFO("deinit\n");
-    return 0;
-}
-
-
-void nk_aspace_dump_aspaces()
-{
-    struct list_head *cur;
-    STATE_LOCK_CONF;
-    STATE_LOCK();
-    list_for_each(cur,&aspace_list) {
-	struct nk_aspace *a = list_entry(cur,struct nk_aspace, aspace_list_node);
-	struct list_head *cr;
-	nk_vc_printf("%s: %s \n", 
-		     a->name, 
-		     a->type==NK_ASPACE_BASE ? "base" :
-		     a->type==NK_ASPACE_PAGING ? "paging" : 
-		     a->type==NK_ASPACE_CARAT ? "carat" : "unknown");
-	list_for_each(cr,&a->region_list) {
-	    struct nk_aspace_region *r = list_entry(cr,struct nk_aspace_region, node);
-	    nk_vc_printf("   [%016lx, %016lx) => %016lx\n", r->va_start, r->va_start+r->len_bytes,r->pa_start);
-	}
-		     
-    }
-    STATE_UNLOCK();
-}
-
-
-static int
-handle_ases (char * buf, void * priv)
-{
-    nk_aspace_dump_aspaces();
-    return 0;
-}
-
-
-static struct shell_cmd_impl ases_impl = {
-    .cmd      = "ases",
-    .help_str = "ases",
-    .handler  = handle_ases,
-};
-nk_register_shell_cmd(ases_impl);
-
-#endif

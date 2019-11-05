@@ -639,7 +639,8 @@ construct_ident_map (pml4e_t * pml, page_size_t ptype, ulong_t bytes)
     }
 }
 
-static uint64_t base_cr3;
+static uint64_t default_cr3;
+static uint64_t default_cr4;
 
 /* 
  * Identity map all of physical memory using
@@ -669,13 +670,25 @@ kern_ident_map (struct nk_mem_info * mem, ulong_t mbd)
     construct_ident_map(pml, lps, last_pfn<<PAGE_SHIFT);
 
     /* install the new tables, this will also flush the TLB */
-    base_cr3 = (uint64_t)pml;
+    default_cr3 = (ulong_t)pml;
+    default_cr4 = (ulong_t)read_cr4();
     write_cr3((ulong_t)pml);
+    
 }
 
-uint64_t nk_paging_get_base_cr3()
+uint64_t nk_paging_default_page_size()
 {
-    return base_cr3;
+    return ps_type_to_size(largest_page_size());
+}
+
+uint64_t nk_paging_default_cr3()
+{
+    return default_cr3;
+}
+
+uint64_t nk_paging_default_cr4()
+{
+    return default_cr4;
 }
 
 

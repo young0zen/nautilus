@@ -25,6 +25,10 @@
 #include <nautilus/shell.h>
 #include <nautilus/vc.h>
 
+#ifdef NAUT_CONFIG_ASPACES
+#include <nautilus/aspace.h>
+#endif
+
 #ifndef NAUT_CONFIG_DEBUG_SHELL
 #undef DEBUG_PRINT
 #define DEBUG_PRINT(fmt, args...) 
@@ -709,6 +713,11 @@ shell (void * in, void ** out)
         ERROR("Cannot bind virtual console for shell\n");
         return;
     }
+
+#ifdef NAUT_CONFIG_ASPACES
+    // put ourselves into the base address space for testing
+    nk_aspace_move_thread(nk_aspace_find("base"));
+#endif
 
     nk_switch_to_vc(vc);
     nk_vc_clear(OUTPUT_CHAR);

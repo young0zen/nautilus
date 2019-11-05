@@ -134,16 +134,23 @@ nk_aspace_t *nk_aspace_create(char *impl_name, char *name, nk_aspace_characteris
     }
 }
 
-#define BOILERPLATE(a,f,args...)                       \
+#define BOILERPLATE_LEAVE(a,f,args...)                 \
     if (a->interface && a->interface->f) {             \
        return a->interface->f(a->state, ##args);       \
     } else {                                           \
        return -1;                                      \
     }
 
+#define BOILERPLATE_DO(a,f,args...)		  \
+    if (a->interface && a->interface->f) {        \
+       a->interface->f(a->state, ##args);         \
+    } 
+
+#define AS_NAME(a) ((a) ? (a)->name : "default")
+
 int  nk_aspace_destroy(nk_aspace_t *aspace)
 {
-    BOILERPLATE(aspace,destroy)
+    BOILERPLATE_LEAVE(aspace,destroy)
 }
     
 nk_aspace_t *nk_aspace_find(char *name)
@@ -160,9 +167,57 @@ nk_aspace_t *nk_aspace_find(char *name)
 	}
     }
     STATE_UNLOCK();
+    DEBUG("search for %s finds %p\n",name,target);
     return target;
 }
 
+// switch address space assuming we have interrupts off
+static int _nk_aspace_switch(nk_aspace_t *next)
+{
+    int rc=-1;
+    struct cpu *cpu = get_cpu();
+    nk_aspace_t *cur = cpu->cur_aspace;
+
+    DEBUG("cpu %d switching from address space %s to %s\n",cpu->id,
+	  AS_NAME(cur),AS_NAME(next));
+
+    if (next==cur) {
+	// do nothing
+	DEBUG("aspaces are the same - ignoring switch\n");
+	return 0;
+    } else {
+	if (cur) {
+	    DEBUG("switching away from current address space\n");
+	    cur->interface->switch_from(cur->state);
+	} else {
+	    DEBUG("switching away from default address space\n");
+	    // switching from default address space does nothing
+	}
+	if (next) {
+	    DEBUG("switching to next address space\n");
+	    next->interface->switch_to(next->state);
+	    cur = next;
+	} else {
+	    DEBUG("switching to default address space\n");
+	    write_cr3(nk_paging_default_cr3());
+	}
+	DEBUG("address space switch complete\n");
+	cpu->cur_aspace = next;
+	return 0;
+    }
+}
+
+int nk_aspace_switch(nk_aspace_t *next)
+{
+    uint8_t flags = irq_disable_save();
+    int rc;
+
+    rc = _nk_aspace_switch(next);
+
+    irq_enable_restore(flags);
+
+    return rc;
+}
 
 int nk_aspace_move_thread(nk_aspace_t *aspace)
 {
@@ -172,7 +227,7 @@ int nk_aspace_move_thread(nk_aspace_t *aspace)
 
     // dangerous if interrupts are off
     DEBUG("moving thread %d (%s) from %p (%s) to %p (%s)\n",t->tid,t->name,
-	  t->aspace, t->aspace->name, aspace, aspace->name);
+	  t->aspace, AS_NAME(t->aspace), aspace, AS_NAME(aspace));
 	
 
     flags = irq_disable_save();
@@ -181,76 +236,51 @@ int nk_aspace_move_thread(nk_aspace_t *aspace)
     // and we are unstealable
     
     // old address space is losing thread
-    BOILERPLATE(t->aspace,remove_thread);
+    if (t->aspace) { 
+	BOILERPLATE_DO(t->aspace,remove_thread);
+    }
 
     // new address space is gaining it
-    BOILERPLATE(aspace,add_thread);
+    BOILERPLATE_DO(aspace,add_thread);
 
-
-    // switch the thread's view
-    t->aspace = aspace;
     
+    DEBUG("Doing switch to %p\n",aspace);
+
     // now actually do the switch
 
-    nk_aspace_switch(aspace);
+    _nk_aspace_switch(aspace);
+
+    t->aspace = aspace;
 
     DEBUG("thread %d (%s) is now in %p (%s)\n",t->tid,t->name, t->aspace,t->aspace->name);
 
+    irq_enable_restore(flags);
+    
     return 0;
 }
 
 int  nk_aspace_add_region(nk_aspace_t *aspace, nk_aspace_region_t *region)
 {
-    BOILERPLATE(aspace,add_region,region);
+    BOILERPLATE_LEAVE(aspace,add_region,region);
 }
 
 int  nk_aspace_remove_region(nk_aspace_t *aspace, nk_aspace_region_t *region)
 {
-    BOILERPLATE(aspace,remove_region,region);
+    BOILERPLATE_LEAVE(aspace,remove_region,region);
 }
 
 int  nk_aspace_protect_region(nk_aspace_t *aspace, nk_aspace_region_t *region, nk_aspace_protection_t *prot)
 {
-    BOILERPLATE(aspace,protect_region,region,prot);
+    BOILERPLATE_LEAVE(aspace,protect_region,region,prot);
 }
 
 
 int  nk_aspace_move_region(nk_aspace_t *aspace, nk_aspace_region_t *cur_region, nk_aspace_region_t *new_region)
 {
-    BOILERPLATE(aspace,move_region,cur_region,new_region);
+    BOILERPLATE_LEAVE(aspace,move_region,cur_region,new_region);
 }
 
-int nk_aspace_switch(nk_aspace_t *next)
-{
-    struct cpu *cpu = get_cpu();
-    nk_aspace_t *cur = cpu->cur_aspace;
 
-    DEBUG("cpu %p\n",cpu);
-    DEBUG("cpu %d switching from address space %p to %p\n",cpu->id,cur,next);
-
-    if (next==cur) {
-	// do nothing
-	DEBUG("aspaces are the same - ignoring switch\n");
-    } else {
-	if (cur) {
-	    DEBUG("switching away from current address space\n");
-	    cur->interface->switch_from(cur->state);
-	} else {
-	    DEBUG("switching away from zero address space\n");
-	    // switching from base address space
-	}
-	if (next) {
-	    DEBUG("switching to next address space\n");
-	    next->interface->switch_to(next->state);
-	    cur = next;
-	} else {
-	    DEBUG("switching to base address space\n");
-	    // switching to base address space
-	}
-    }
-    DEBUG("address space switch complete\n");
-    return 0;
-}
 
 int nk_aspace_exception(excp_entry_t *entry, excp_vec_t vec, void *priv_data)
 {
@@ -281,8 +311,13 @@ int nk_aspace_exception(excp_entry_t *entry, excp_vec_t vec, void *priv_data)
 
 int nk_aspace_init()
 {
+
+    int nk_aspace_base_init();
+
     INIT_LIST_HEAD(&aspace_list);
     spinlock_init(&state_lock);
+
+    nk_aspace_base_init();
 
     return 0;
 }
@@ -301,7 +336,7 @@ int nk_aspace_dump_aspaces(int detail)
     STATE_LOCK();
     list_for_each(cur,&aspace_list) {
 	struct nk_aspace *a = list_entry(cur,struct nk_aspace, aspace_list_node);
-	BOILERPLATE(a,print,detail);
+	BOILERPLATE_DO(a,print,detail);
     }
     STATE_UNLOCK();
     return 0;
