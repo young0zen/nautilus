@@ -134,15 +134,27 @@ void MARC::ThreadTask<Func>::execute (void){
     }
   }
 
-  VIRGIL_DEBUG("About to run task %p\n", this);
+  VIRGIL_DEBUG("About to run task foo %p\n", this);
   /*
    * Run
    */
 
-  //while (1) {}
+  VIRGIL_DEBUG("this=%p\n",this);
+  VIRGIL_DEBUG("this->m_func=%p\n",(void*)&this->m_func);
+
+  uint64_t *temp= (uint64_t*)&this->m_func;
+  int i;
+  
+  for (i=0;i<16;i++) {
+    VIRGIL_DEBUG("this->m_func[%d]=%016lx\n",i,temp[i]);
+  }
+
   
   this->m_func();
 
+  VIRGIL_DEBUG("task complete\n");
+  
+  while (1) {}
   
   return ;
 }
