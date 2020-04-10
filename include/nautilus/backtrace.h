@@ -47,7 +47,7 @@ void nk_print_regs(struct nk_regs * r);
 // backtrace facility using compiler builtins
 #define IS_CANONICAL(x) ((((uint64_t)(x))<0x0000800000000000ULL) || (((uint64_t)(x))>=0xffff800000000000ULL))
 #define IN_PHYS_MEM(x) (((uint64_t)(x)) < nk_get_nautilus_info()->sys.mem.phys_mem_avail)
-#define IS_VALID(x)   ((x) && IS_CANONICAL(x))
+#define IS_VALID(x)  ((x) && IS_CANONICAL(x))
 #define BACKTRACE(print_func,limit)			\
 do {							\
     void *_cur = __builtin_return_address(0);		\

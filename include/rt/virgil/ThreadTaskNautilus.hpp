@@ -149,6 +149,7 @@ void MARC::ThreadTask<Func>::execute (void){
     VIRGIL_DEBUG("this->m_func[%d]=%016lx\n",i,temp[i]);
   }
 
+  VIRGIL_DEBUG("About to invoke this->mfunc\n");
   
   this->m_func();
 

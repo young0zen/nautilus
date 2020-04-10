@@ -718,6 +718,9 @@ shell (void * in, void ** out)
         int i;
         for (i = 0; *op->script[i]; i++) {
             nk_vc_printf("***exec: %s\n", op->script[i]);
+	    if (!op->script[i]) {
+	      break;
+	    }
             shell_handle_cmd(state, op->script[i], SHELL_MAX_CMD);
         }
 

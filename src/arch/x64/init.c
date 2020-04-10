@@ -254,6 +254,11 @@ static int launch_vmm_environment()
 }
 
 
+static char *script[] = {
+  "cores",
+  "virgil",
+  0
+};
 
 #define NAUT_WELCOME \
 "Welcome to                                         \n" \
@@ -527,7 +532,8 @@ init (unsigned long mbd,
     nk_run_tests(naut);
 #endif
 
-    nk_launch_shell("root-shell",0,0,0);
+    
+    nk_launch_shell("root-shell",0,script,0);
 
     runtime_init();
 

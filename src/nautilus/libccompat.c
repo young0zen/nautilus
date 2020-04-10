@@ -310,6 +310,7 @@ char *
 strerror (int errnum)
 {
   nk_vc_printf("strerror with error %d\n",errnum);
+  BACKTRACE(nk_vc_printf,8);
   UNDEF_FUN_ERR();
   return "Nautilus Unimplented Function";
 }
