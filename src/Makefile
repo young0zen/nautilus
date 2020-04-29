@@ -1,3 +1,5 @@
+ifndef NAUT_CONFIG_X86_32_HOST
+
 obj-y += \
 	nautilus/ \
 	arch/ \
@@ -15,3 +17,9 @@ obj-$(NAUT_CONFIG_LEGION_RT) += legion_runtime/
 obj-$(NAUT_CONFIG_LOAD_LUA) += lua_src/
 obj-$(NAUT_CONFIG_RUST_SUPPORT) += rust/
 obj-$(NAUT_CONFIG_ASPACES) += aspace/
+
+else
+
+obj-y += arch/
+
+endif

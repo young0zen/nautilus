@@ -358,7 +358,10 @@ COMMON_FLAGS :=-fno-omit-frame-pointer \
 			   -fno-strict-aliasing \
                            -fno-strict-overflow \
 			   -mno-red-zone \
+
+ifndef NAUT_CONFIG_X86_32_HOST
 			   -mcmodel=large
+endif
 
 
 

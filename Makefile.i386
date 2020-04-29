@@ -1,0 +1,11 @@
+# ==========================================================================
+# Build system
+# ==========================================================================
+
+# -mpreferred-stack-boundary=2 is essential in preventing gcc 4.2.x
+# from aligning stack to 16 bytes. (Which is gcc's way of supporting SSE).
+CFLAGS += $(call cc-option,-m32,) 
+AFLAGS += $(call cc-option,-m32,)
+LDFLAGS += -melf_i386 -dp
+
+
