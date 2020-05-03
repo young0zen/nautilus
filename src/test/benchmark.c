@@ -20,6 +20,16 @@
  * This is free software.  You are permitted to use,
  * redistribute, and modify it as specified in the file "LICENSE.txt".
  */
+
+
+//
+// Notes to CS446 team:
+//
+//  This code is intended to be compiled within NK and also as a
+//     Linux user-level program
+//     If __USER is defined it is the Linux user
+//
+
 #ifdef __USER
 
 #define _GNU_SOURCE
@@ -844,7 +854,9 @@ static uint64_t syscall_start = 0;
 
 void syscall_handler(void)
 {
+    rdtscll(syscall_end);
 }
+
 
 static void
 syscall_setup (void)
@@ -1103,10 +1115,20 @@ malloc_test (void)
 #endif
 
 void run_benchmarks(void);
+
 void 
 run_benchmarks(void)
 {
+    // CS 446 - here is where you add particular benchmarks to run
+
+    PRINT("Timing int 80\n");
+    time_int80();
+    PRINT("Timing syscall\n");
     time_syscall();
+    PRINT("Timing thread creations and launches\n");
+    time_thread_both();
+
+    
 }
 
 #ifdef __USER 
@@ -1143,6 +1165,9 @@ int main () {
     return 0;
 }
 
+// BUG FIX
+#endif
+
 static int
 handle_bench (char * buf, void * priv)
 {
@@ -1157,4 +1182,3 @@ static struct shell_cmd_impl bench_impl = {
 };
 nk_register_shell_cmd(bench_impl);
 
-#endif
