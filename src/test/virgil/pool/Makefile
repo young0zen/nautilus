@@ -1,4 +1,4 @@
-obj-y = test1.o
+obj-y = testq.o #test1.o
 
 # CPP=clang++
 # CFLAGS=-std=c++14 -g -I../../include

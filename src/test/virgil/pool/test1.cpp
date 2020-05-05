@@ -4,7 +4,7 @@
 #include "ThreadPoolNautilus.hpp" 
 #include "work.hpp"
 
-
+/*
 extern "C" int __pthread_key_create(pthread_key_t *key, void (*destructor)(void*)) {
   VIRGIL_DEBUG("key create\n");
   return 0;
@@ -14,6 +14,7 @@ extern "C" int pthread_once(pthread_once_t *whatever, void (*whatever2)(void)) {
   VIRGIL_DEBUG("pthread once\n");
   return 0;
 }
+*/
 
 int simone_main (int x){
 
@@ -60,9 +61,9 @@ int virgil_test1(int argc, char *argv[])
 {
   VIRGIL_DEBUG("In virgil_test\n");
   
-  int rc= simone_main2(argc,argv);
+ //  int rc= simone_main2(argc,argv);
 
-  VIRGIL_DEBUG("returned from simone_main - rc=%d\n",rc);
+ // VIRGIL_DEBUG("returned from simone_main - rc=%d\n",rc);
 
   //  return rc;
   
