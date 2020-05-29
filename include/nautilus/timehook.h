@@ -72,5 +72,13 @@ int nk_time_hook_init();
 // called by every AP before interrupts are enabled
 int nk_time_hook_init_ap();
 
+// called by bsp after kernel is ready on all CPUs
+int nk_time_hook_start();
+
+// gather data on nk_time_hook_fire
+void get_time_hook_data(void);
+
+void nk_time_hook_dump(void);
+
 
 #endif

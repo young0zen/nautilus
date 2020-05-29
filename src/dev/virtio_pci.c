@@ -33,6 +33,8 @@
 #include <dev/virtio_net.h>
 #endif
 
+int x;
+
 #ifdef NAUT_CONFIG_VIRTIO_BLK
 #include <dev/virtio_blk.h>
 #endif
