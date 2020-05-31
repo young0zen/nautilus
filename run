@@ -1,2 +1,2 @@
-touch src/test/virgil/pool/test1.cpp && make isoimage && qemu-system-x86_64 -smp 2 -m 2048 -vga std -cdrom nautilus.iso -serial stdio
+make isoimage && qemu-system-x86_64 -smp 2 -m 2048 -vga std -cdrom nautilus.iso -serial stdio
 

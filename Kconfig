@@ -1118,6 +1118,18 @@ menu "Runtimes"
 	  help
 	      Include the Virgil run-time
 
+        config VIRGIL_RT_LIBRARY
+            string "Path to application codebase (.a file)"
+	    default "/home/simone/test/virgil1/virgil1.o"
+            depends on VIRGIL_RT
+            help
+	       The path to the code that has been compiled to
+	       use the virgil runtime.   This will be statically linked to
+	       nautilus and its entry point:
+   	          nk_virgil_entry(int argc, char *argv[])
+	       will be bound to the shell command "virgil ..."
+	       
+
         config VIRGIL_RT_DEBUG
             bool "Debug Virgil RT";
 	    default n
@@ -1125,12 +1137,6 @@ menu "Runtimes"
             help 
               Debugging output for Virgil RT
 
-        config VIRGIL_RT_TESTS
-            bool "Include tests/benchmarks for Virgil RT";
-	    default n
-            depends on VIRGIL_RT
-            help 
-              Include Virgil simple tests
 
        config RACKET_RT
             bool "Racket RT (via Multiverse)";
