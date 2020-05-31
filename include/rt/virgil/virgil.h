@@ -17,11 +17,41 @@
 // VIRGIL's queues, specifically MARC::ThreadSafeNautilusQueue<T>,
 // are used for intertask communication.
 //
-
-// C++ interfaces for queues are in
-// #include <rt/virgil/ThreadSafeNautilusQueue.hpp>
+// VIRGIL's spinlocks are a thin layer on top of NK's spinlocks
+//
 
 // C interfaces are here
+
+/*
+
+  Initial compilation/run process
+
+  1. Noelle-side compilation as usual with these changes:
+   
+- Use of the compiler flags documented in include/rt/virgil/compiler_flags
+- Entry point is not main, but rather nk_virgil_entry(int argc, char *argv[])
+- All code is compiled to static library => /my/path/to/libvirgil_app.a
+- No use of libc or other library primitives that assume the system call interface
+
+  2. Enable Virgil run-time ("make menuconfig" -> Runtimes->Virgil RT) and add library 
+     to Runtimes->Virgil->Path to application code 
+
+  3. Compile + link NK
+
+  4. You can now run the application from the command line as:
+     virgil command args...
+
+ */
+
+
+#ifdef __cplusplus
+
+// the thread safe queues with a C++ interface
+#include <rt/virgil/ThreadSafeNautilusQueue.hpp>
+
+extern "C" {
+
+#endif
 
 // a task is opaque from the user's perspective
 typedef void *nk_virgil_task_t;
@@ -67,45 +97,47 @@ int nk_virgil_check_for_task_completion(nk_virgil_task_t task, void **output);
 //          [in this case, do not check on the task again]
 int nk_virgil_wait_for_task_completion(nk_virgil_task_t task, void **output);
 
-// get the number of tasks that are queued on a given cpu
-// negative return => error
-int nk_virgil_waiting_tasks(int cpu);
-
 // get number of idle cpus (ones without tasks)
 // note that there is no way to make this scalable...
 // negative return => error
 int nk_virgil_idle_cpus(void);
 
+// get the number of tasks that are queued on a given cpu
+// negative return => error
+int nk_virgil_waiting_tasks_cpu(int cpu);
+
 // get the number of tasks that are queued throughout the system
 // note that there is no way to make this scalable...
 // negative return => error
-int nk_virgil_waiting_tasks(void);
-
-// for internal use
-int nk_virgil_init();
-int nk_virgil_init_ap();
-void nk_virgil_deinit();
+int nk_virgil_waiting_tasks_system(void);
 
 
+   
+// spinlocks - should be identical type to spinlock_t
+typedef unsigned int nk_virgil_spinlock_t;
+
+// initialize a lock to the unlocked state
+void nk_virgil_spinlock_init(nk_virgil_spinlock_t *lock);
+void nk_virgil_spinlock_deinit(nk_virgil_spinlock_t *lock);
+
+// spin on the lock until you get it
+void nk_virgil_spinlock_lock(nk_virgil_spinlock_t *lock);
+    
+// attempt to get the lock, just once, returns zero on success
+int nk_virgil_spinlock_try_lock(nk_virgil_spinlock_t *lock);
+
+void nk_virgil_spinlock_unlock(nk_virgil_spinlock_t *lock);
+
+// the irq_save/irq_restore aspects are not used in virgil at the current time
+
+#ifdef __cplusplus
+}
 #endif
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #endif
+
 
 
 
