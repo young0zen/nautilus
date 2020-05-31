@@ -3790,6 +3790,49 @@ int nk_task_try_wait(struct nk_task *task, void **output, struct nk_task_stats *
 }
 
 
+void nk_task_cpu_snapshot(int cpu, nk_task_cpu_snapshot_t *snap)
+{
+    struct sys_info * sys = per_cpu_get(system);
+    task_info *ti = &sys->cpus[cpu]->sched_state->tasks;
+
+    // we will not lock the state to get this info...
+    // we are going for an approximate count
+
+#define COPY(x) snap->x = ti->x
+    COPY(sized_enqueued);
+    COPY(sized_dequeued);
+    COPY(unsized_enqueued);
+    COPY(unsized_dequeued);
+
+}
+
+void nk_task_system_snapshot(nk_task_system_snapshot_t *snap, uint64_t *idle_cpu_count)
+{
+    struct sys_info * sys = per_cpu_get(system);
+    int i;
+    uint64_t s, u;
+
+    memset(snap,0,sizeof(*snap));
+    *idle_cpu_count=0;
+    
+    // note no locking is done here by intention - this is an approximate count
+    // it's bad enough that it's unscalable.
+    for (i=0;i<sys->num_cpus;i++) {
+	task_info *ti = &sys->cpus[i]->sched_state->tasks;
+#define ADD(x) snap->x += ti->x
+	ADD(sized_enqueued);
+	ADD(sized_dequeued);
+	ADD(unsized_enqueued);
+	ADD(unsized_dequeued);
+	*idle_cpu_count +=
+	    ((snap->sized_enqueued - snap->sized_dequeued)==0) &&
+	    ((snap->unsized_enqueued - snap->unsized_dequeued)==0);
+	    
+    }
+
+}
+
+
 
 static struct nk_sched_percpu_state *init_local_state(struct nk_sched_config *cfg)
 {

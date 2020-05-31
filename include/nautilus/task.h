@@ -63,7 +63,20 @@ struct nk_task {
     struct list_head queue_node;
 };
 
+// a CPU-level snapshot - this is APPROXIMATE
+typedef struct nk_task_cpu_snapshot {
+    uint64_t           sized_enqueued;   // number of sized tasks enqueued
+    uint64_t           sized_dequeued;   //   and dequeued (locally or remotely)
+                                         // difference is how many are waiting
+    uint64_t           unsized_enqueued; // number of unsized tasks enqueud
+    uint64_t           unsized_dequeued; //   and dequeued (locally or remotely)
+                                         // difference is how many are waiting
+} nk_task_cpu_snapshot_t;
 
+// a system-level snapshot - again, APPROXIMATE
+typedef nk_task_cpu_snapshot_t nk_task_system_snapshot_t;
+
+    
 // create and queue a task
 // cpu == -1 => any cpu
 // size == 0 => unknown size, otherwise worst case run time in ns
@@ -91,6 +104,14 @@ int nk_task_wait(struct nk_task *task, void **output, struct nk_task_stats *stat
 
 // same as above, but will not spin
 int nk_task_try_wait(struct nk_task *task, void **output, struct nk_task_stats *stats);
+
+// approximate number of tasks waiting to run on on given cpu
+void nk_task_cpu_snapshot(int cpu, nk_task_cpu_snapshot_t *snap);
+
+// approximate number of tasks waiting to run on all cpus
+void nk_task_system_snapshot(nk_task_system_snapshot_t *snap, uint64_t *idle_cpu_count);
+
+
 
 
 // Note that the implementation of tasks in scheduler.c
