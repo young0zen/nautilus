@@ -27,7 +27,10 @@ nk_virgil_task_t nk_virgil_submit_task_to_any_cpu(nk_virgil_func_t func,
 						  void *input)
 {
     // any cpu, unknown size, not detached
-    return nk_task_produce(-1,0,func,input,0);
+    DEBUG("submit virgil task %p(%p) to any cpu\n", func, input);
+    nk_virgil_task_t task = nk_task_produce(-1,0,func,input,0);
+    DEBUG("resulting NK task is %p\n", task);
+    return task;
 }
 
 // submit a task to any cpu and detach
@@ -35,7 +38,10 @@ nk_virgil_task_t nk_virgil_submit_task_to_any_cpu_and_detach(nk_virgil_func_t fu
 							     void *input)
 {
     // any cpu, unknown size, detached
-    return nk_task_produce(-1,0,func,input,NK_TASK_DETACHED);
+    DEBUG("submit virgil task %p(%p) to any cpu and detach\n", func, input);
+    nk_virgil_task_t task = nk_task_produce(-1,0,func,input,NK_TASK_DETACHED);
+    DEBUG("resulting NK task is %p\n", task);
+    return task;
 }
 
 // submit a task to a specific cpu
@@ -44,7 +50,10 @@ nk_virgil_task_t nk_virgil_submit_task_to_specific_cpu(nk_virgil_func_t func,
 						       int cpu)
 {
     // specific cpu, unknown size, not detached
-    return nk_task_produce(cpu,0,func,input,0);
+    DEBUG("submit virgil task %p(%p) to cpu %d\n", func, input, cpu);
+    nk_virgil_task_t task = nk_task_produce(cpu,0,func,input,0);
+    DEBUG("resulting NK task is %p\n", task);
+    return task;
 }
 
 
@@ -68,7 +77,7 @@ nk_virgil_task_t nk_virgil_submit_task_to_cpu_set(nk_virgil_func_t func,
     int cpus;
     int last;
 
-    DEBUG("submit task to cpu set - %d cpus in the set, our target is %d\n",num,target);
+    DEBUG("submit virgil task %p(%p) to cpu set - %d cpus in the set, our target is %d\n",func, input, num,target);
     
     cpus=0;
     last=0;
@@ -84,7 +93,9 @@ nk_virgil_task_t nk_virgil_submit_task_to_cpu_set(nk_virgil_func_t func,
 
     if (cpus==target) {
 	DEBUG("target cpu is %d\n",i);
-	return nk_virgil_submit_task_to_specific_cpu(func,input,i);
+	nk_virgil_task_t task = nk_virgil_submit_task_to_specific_cpu(func,input,i);
+	DEBUG("resulting NK task is %p\n", task);
+	return task;
     } else {
 	ERROR("target NOT found\n");
 	return 0;
@@ -99,9 +110,13 @@ nk_virgil_task_t nk_virgil_submit_task_to_cpu_set(nk_virgil_func_t func,
 //          [in this case, do not check on the task again]
 int nk_virgil_check_for_task_completion(nk_virgil_task_t task, void **output)
 {
+    DEBUG("try wait on task %p\n", task);
+
     // no statistics requested    
     int rc = nk_task_try_wait((struct nk_task *)task, output, 0);
 
+    DEBUG("try wait result is %d\n", rc);
+    
     if (rc<0) {
 	return rc;
     } else {
@@ -118,7 +133,11 @@ int nk_virgil_check_for_task_completion(nk_virgil_task_t task, void **output)
 //          [in this case, do not check on the task again]
 int nk_virgil_wait_for_task_completion(nk_virgil_task_t task, void **output)
 {
+    DEBUG("wait on task %p\n", task);
+
     int rc = nk_task_wait((struct nk_task *)task,output,0);
+
+    DEBUG("wait result is %d\n", rc);
 
     if (rc<0) {
 	return rc;
@@ -134,14 +153,21 @@ int nk_virgil_waiting_tasks_cpu(int cpu)
 {
     nk_task_cpu_snapshot_t snap;
 
+    DEBUG("get count of waiting tasks on cpu %d\n", cpu);
+    
     nk_task_cpu_snapshot(cpu,&snap);
 
+    uint64_t count;
+    
     // we assume we are responsible for all the unsized tasks
     if (snap.unsized_dequeued <= snap.unsized_enqueued) {
-	return (int)(snap.unsized_enqueued - snap.unsized_dequeued);
+	count = (snap.unsized_enqueued - snap.unsized_dequeued);
     } else {
-	return 0;
+	count = 0;
     }
+    
+    DEBUG("count is %lu (returning %d)\n", count, (int)count);
+    return count;
 }
 
 
@@ -149,6 +175,8 @@ static void _waiting_info_sys(uint64_t *waiting, uint64_t *idle_cpus)
 {
     nk_task_system_snapshot_t snap;
 
+    DEBUG("get count of waiting tasks and idle cpus on system\n");
+    
     nk_task_system_snapshot(&snap,idle_cpus);
 
     // we assume we are responsible for all the unsized tasks
@@ -157,7 +185,9 @@ static void _waiting_info_sys(uint64_t *waiting, uint64_t *idle_cpus)
     } else {
 	*waiting = 0;
     }
+    DEBUG("count of waiting tasks is %lu and there are %lu idle cpus\n", *waiting, *idle_cpus);
 }
+
 
 // get the number of tasks that are queued throughout the system
 // note that there is no way to make this scalable...
@@ -168,6 +198,8 @@ int nk_virgil_waiting_tasks_on_system(int cpu)
     
     _waiting_info_sys(&waiting,&idle);
 
+    DEBUG("there are %d waiting tasks on the system\n", (int)waiting);
+    
     return (int)waiting;
 }
 
@@ -181,6 +213,8 @@ int nk_virgil_idle_cpus(void)
     
     _waiting_info_sys(&waiting,&idle);
 
+    DEBUG("there are %d idle cpus in the system\n", (int)idle);
+    
     return (int)idle;
 }
 
@@ -219,16 +253,19 @@ void nk_virgil_spinlock_unlock(nk_virgil_spinlock_t *lock)
 }
 
 
+
 static int _nk_virgil_entry_test(int argc, char *argv[])
 {
     int i;
     DEBUG("hello, my args are:\n");
     for (i=0;i<argc;i++) {
-	DEBUG("\"%s\"\n",argv[i]);
+      DEBUG("argv[%d] = \"%s\"\n",i,argv[i]);
     }
 
     return 0;
 }
+
+int smain(int argc, char *argv[]);
 
 #define MAXCMD 256
     
@@ -243,13 +280,19 @@ handle_virgil(char * buf, void * priv)
 
     char *c = b;
     enum {WS,NWS} state=WS;
-    
+
+    // we are converting
+    //    virgil cmd arg1 arg2 arg3
+    // to
+    //    virgil\0cmd\0arg1\0\arg2\0\arg3\0
+    //
+
     while (*c) {
 	if (state==WS) {
 	    if (isspace(*c)) {
 		// nothing
 	    } else {
-		argv[argc++] = c;
+	        argv[argc++] = c;
 		state = NWS;
 	    }
 	} else { //state==NWS
@@ -262,8 +305,14 @@ handle_virgil(char * buf, void * priv)
 	}
 	c++;
     }
-	    
-    int rc = _nk_virgil_entry_test(argc,argv);
+
+    char **dest_argv = &argv[1];
+    int dest_argc = argc-1;
+    
+    //    int rc = _nk_virgil_entry_test(dest_argc,dest_argv);
+    _nk_virgil_entry_test(dest_argc,dest_argv);
+    int rc = smain(dest_argc,dest_argv);
+    
 
     nk_vc_printf("virgil app returned %d\n", rc);
     
