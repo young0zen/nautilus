@@ -1390,6 +1390,31 @@ menu "Runtimes"
             help 
               Include OpenMP simple tests and Edinburgh microbenchmarks
 
+        config MPL_RT
+	    bool "MPL RT"
+	    default n
+	    help
+		Include the MPL run-time
+
+	config MPL_RT_TESTS
+            bool "Include tests/benchmarks for MPL RT";
+	    default n
+            depends on MPL_RT
+            help 
+              Include MPL simple tests
+
+	config MPL_RT_OBJ_DIR
+	    string "DIRECTORY OF MPL.0.o and MPL.1.o"
+            depends on MPL_RT
+            help 
+              Include MPL Program Object
+
+	config MPL_RT_DIR
+	   string "MPL DIRECTORY"
+	   depends on MPL_RT
+	   help
+		Directory of MPL installed
+
        config RACKET_RT
             bool "Racket RT (via Multiverse)";
 	    default y
